@@ -1,0 +1,8 @@
+cputime.c  - example of how to measure the execution time of a code
+omp_hello.c - simple omp file
+omp_reduction.c - reduction
+
+---  makefiles for different architectures
+makefile 
+make.inc  -  configuraton
+
