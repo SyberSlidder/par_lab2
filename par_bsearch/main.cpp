@@ -9,6 +9,12 @@
 
 #define DEBUG 1
 
+typedef struct {
+  int key;
+  int index;
+  bool found;
+} resultStruct;
+
 void print_array(int * ptr, int num_elements) {
   for(int i = 0; i < num_elements; i++) {
       printf("%d ",ptr[i]);
@@ -31,21 +37,57 @@ int int_comparator(const void * p1,const void *p2) {
  return 0;
 }
 
-void* par_bsearch (
-	    const void* key, 
+void par_bsearch (
+	    const void* keys, 
 	    const void* base,
             size_t num, 
 	    size_t size,
 	    int (*compar)(const void*,const void*),
 	    int num_keys,
 	    MPI_Comm mpi_comm,
-	    int num_threads
+	    int num_threads,
+	    resultStruct * result_buff
 	    )
 {
-  
-  
-  
-  return (void *)0;
+   
+    int threadID,startIndex,numToProcess;
+    int per_thread = num / num_threads;
+    int remainder  = num_threads % per_thread;
+    int resultSlot;
+   
+    #pragma omp parallel private(threadID,startIndex,numToProcess,resultSlot)
+    {
+      resultSlot = 0;
+      threadID = omp_get_thread_num();
+      if (threadID == 0) {
+	numToProcess = per_thread + remainder;
+	startIndex   = 0;
+      } else {
+	numToProcess = per_thread;
+	startIndex = (per_thread * threadID) + remainder;
+      }
+      
+      for (int curr_key_index = 0; curr_key_index < num_keys; curr_key_index++) {
+	void * searchResult = bsearch(
+				    &(((int *)keys)[curr_key_index]),
+				    ((int *)base+startIndex),
+				    numToProcess,
+				    size,
+				    compar
+				  );
+	
+	if (searchResult != 0) {
+	  int index = (int)((int *)searchResult - (int *)base);
+	  int resultIndex = (threadID * num_threads) + resultSlot;
+	  result_buff[resultIndex].found = true;
+	  result_buff[resultIndex].key   = ((int *)keys)[curr_key_index];
+	  result_buff[resultIndex].index = index;
+	  resultSlot++;
+	}
+	
+      }
+      
+    }
   
 }
 
@@ -64,17 +106,19 @@ int main(int argc, char * argv[]) {
    int sockets_per_node;
    int threads_per_socket;
    int num_keys;
+   int max_val;
    
-   if (argc < 6) {
+   if (argc < 7) {
      printf("Usage: ./bsearch array_size num_keys nodes sockets_per_node threads_per_socket\n");
      return -1;
    } else {
       
       sscanf(argv[1],"%d",&array_size);
       sscanf(argv[2],"%d",&num_keys);
-      sscanf(argv[3],"%d",&nodes);
-      sscanf(argv[4],"%d",&sockets_per_node);
-      sscanf(argv[5],"%d",&threads_per_socket);
+      sscanf(argv[3],"%d",&max_val);
+      sscanf(argv[4],"%d",&nodes);
+      sscanf(argv[5],"%d",&sockets_per_node);
+      sscanf(argv[6],"%d",&threads_per_socket);
       /*
       printf("Elements: %d\n",array_size);
       printf("Nodes: %d\n",nodes);
@@ -109,12 +153,12 @@ int main(int argc, char * argv[]) {
       
       // Place keeper
       for (int i = 0; i < num_keys; i++) {
-	keys_array[i] = (rand() % INT_MAX) + 1;
+	keys_array[i] = (rand() % max_val) + 1;
       }
       
       // initialize to random integers
       for (int i = 0; i < array_size; i++) {
-	int_array[i] = (rand() % INT_MAX) + 1;
+	int_array[i] = (rand() % max_val) + 1;
       }
       // Sort the array
       //printf("Raw array: \n");
@@ -160,6 +204,38 @@ int main(int argc, char * argv[]) {
     // Some openmp book keeping
     omp_set_num_threads(threads_per_socket);
     
+    resultStruct * results = new resultStruct[threads_per_socket * num_keys]; 
+    
+    for (int i = 0; i < (threads_per_socket * num_keys); i++) {
+      results[i].found = false;
+    }
+    
+    // Do the binary search
+    par_bsearch(
+	    keys_array, 
+	    int_array,
+            (rank == 0 ? elems_per_task + remainder: elems_per_task), 
+	    sizeof(int),
+	    int_comparator,
+	    num_keys,
+	    MPI_COMM_WORLD,
+	    threads_per_socket,
+	    results
+	    );
+
+    // Results are done by here
+    // print out the results
+    for (int i = 0; i < (threads_per_socket * num_keys); i++) {
+      resultStruct curr_res = results[i];
+      if (curr_res.found) {
+	// a result was found
+	printf("Key %d was found on rank %d at index %d\n",curr_res.key,rank,startIndex+curr_res.index);
+	
+      }
+      
+    }
+    
+    
     /*
     printf("Array from Rank %d of size %d: ",rank,size);
     for (int i = 0; i < elems_per_task; i++) {
@@ -167,19 +243,7 @@ int main(int argc, char * argv[]) {
     }
     printf("\n");
     */
-    
-    /*
-    omp_set_num_threads(6);
-    
-    int threadID;
-    
-    #pragma omp parallel private(threadID)
-    {
-      threadID = omp_get_thread_num();
-      printf("Thread: %d of Rank: %d of Size: %d\n",threadID,rank,size);
-  
-    }
-    */
+
     MPI_Finalize();
     
     return 0;
