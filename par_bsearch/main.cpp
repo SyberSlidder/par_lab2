@@ -6,6 +6,8 @@
 #include <mpi.h>
 #include <limits.h>
 #include <omp.h>
+#include <ctime>
+
 
 #define DEBUG 1
 
@@ -98,6 +100,8 @@ void search(int num_elements) {
 
   
 }
+
+using namespace std;
   
 int main(int argc, char * argv[]) {
   
@@ -109,7 +113,7 @@ int main(int argc, char * argv[]) {
    int max_val;
    
    if (argc < 7) {
-     printf("Usage: ./bsearch array_size num_keys nodes sockets_per_node threads_per_socket\n");
+     printf("Usage: ./bsearch array_size num_keys max_val nodes sockets_per_node threads_per_socket\n");
      return -1;
    } else {
       
@@ -210,6 +214,9 @@ int main(int argc, char * argv[]) {
       results[i].found = false;
     }
     
+    // Start measuring time
+	clock_t begin = clock();
+    
     // Do the binary search
     par_bsearch(
 	    keys_array, 
@@ -222,7 +229,23 @@ int main(int argc, char * argv[]) {
 	    threads_per_socket,
 	    results
 	    );
+   
+    // Let rank 0 know you are done
+    int tmp_buff;
+    if (rank == 0) {
+	// wait on everyone to be done
+	for (int curr_rank = 1; curr_rank < size; curr_rank++) {
+		MPI_Recv((void *)&tmp_buff,1,MPI_INT,MPI_ANY_SOURCE,2,MPI_COMM_WORLD,&status_handle);
+	}
+    } else {
+	MPI_Ssend(&tmp_buff,1,MPI_INT,0,2,MPI_COMM_WORLD);
+    }
 
+    // End time measurement
+	clock_t end = clock();
+    
+	double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+     
     // Results are done by here
     // print out the results
     for (int i = 0; i < (threads_per_socket * num_keys); i++) {
@@ -235,6 +258,9 @@ int main(int argc, char * argv[]) {
       
     }
     
+    if (rank == 0) {
+	printf("Time taken is: %f seconds and %f ms.\n",elapsed_secs,elapsed_secs * 1000);
+    }
     
     /*
     printf("Array from Rank %d of size %d: ",rank,size);
