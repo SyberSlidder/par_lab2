@@ -25,14 +25,15 @@ static inline int nextPow2(int n)
 }
 
 
-int main( int argc, char **argv){	
+int main( int argc, char **argv){
+	omp_set_num_threads(32);	
 	//time_t te,ts;	
 	double te,ts;
 	// problem setup
 	int n=10;
 	if(argc>1) n=atoi(argv[1]);
 	int N=nextPow2(n);
-	printf("N=%d\n",N);
+//	printf("N=%d\n",N);
 	double **x;
 	x = (double**)malloc(N*sizeof(double*));
         if(x==NULL){printf("malloc fail!,sizeofchar*=%d,sizeofdouble*=%d\n",sizeof(char*),sizeof(double*)); return 0;}
@@ -41,7 +42,7 @@ int main( int argc, char **argv){
 		if(x[i] == NULL){ printf("x[%d] malloc failed \n",i);
 				return 0;}
 	}
-	printf("malloc success !\n");
+//	printf("malloc success !\n");
 	srand((unsigned)time(NULL));
 
 	// print input
@@ -63,7 +64,7 @@ int main( int argc, char **argv){
 	// scan
 	genericScan((void**) x,N,sizeof(double*));
 	te = omp_get_wtime();
-	printf("Time= %.4g, %.4g, %.4g\n",ts,te,te-ts);
+	printf("Time= %.4g\n",te-ts);
 	//print output
 	double **t = x+1;
 	for(int i=0;i<4;i++){

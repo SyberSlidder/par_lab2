@@ -47,7 +47,7 @@ void genericScan(void *X, int n, size_t l)
  		for(i=stride-1;i<n;i+=stride){
 			//ubop( (void *)(c+i*l), (void *)(c+l*(i-stride/2))) ;
 			ubop( (void *)(c+i), (void *)(c+(i-stride/2))) ;
-			//int  tid = omp_get_thread_num();
+			int  tid = omp_get_thread_num();
 			//printf("thread = %d\n", tid);
 		}
 		stride *=2;

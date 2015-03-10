@@ -25,6 +25,7 @@ static inline int nextPow2(int n)
 
 
 int main( int argc, char **argv){	
+	omp_set_num_threads(32);
 	//time_t te,ts;	
 	double te,ts;
 	// problem setup
